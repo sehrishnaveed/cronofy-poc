@@ -19,7 +19,8 @@ dotenv.config();
 
 // Setup
 const PORT = 7070;
-const origin = "http://qa.umwella.com:7070";
+const origin = "http://localhost:7070";
+// const origin = "http://qa.umwella.com:7070";
 
 let localStorage;
 if (typeof localStorage === "undefined" || localStorage === null) {
@@ -51,12 +52,16 @@ function getAuthTokenInfo() {
 
 function getAccessToken() {
     const authDetail = JSON.parse(localStorage.getItem('auth_token_detail'));
-    return authDetail.access_token;
+    if (authDetail) {
+        return authDetail.access_token;
+    }
 }
 
 function getRefreshToken() {
     const authDetail = JSON.parse(localStorage.getItem('auth_token_detail'));
-    return authDetail.refresh_token;
+    if (authDetail) {
+        return authDetail.refresh_token;
+    }
 }
 
 function setCalendarsList(calendarInfo) {
