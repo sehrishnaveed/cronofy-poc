@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Availability:</title>
+
+    <link href="/app.css" rel="stylesheet">
+    <link href="/popover.css" rel="stylesheet">
+</head>
+<body>
+    <div class="wrapper__outer">
+        <div class="wrapper__inner">
+
+            <a href="/" class="link--secondary">Back to homepage</a>
+            
+            <h1>Book an event</h1>
+            <p>Pick a day and time that works for you</p>
+                
+            <div class="element__wrapper">
+                <div id="cronofy-availability-viewer"></div>
+
+                <script src="https://elements.cronofy.com/js/CronofyElements.v1.20.7.js"></script>
+                <script>
+                    let selectedSlot = {};
+                    function openForm() {
+                        document.getElementById("myForm").style.display = "block";
+                    }
+
+                    function closeForm() {
+                        document.getElementById("myForm").style.display = "none";
+                    }
+
+                    function confirm() {
+                        if (selectedSlot) {
+                            const title = document.getElementById("title").value;
+                            const description = document.getElementById('description').value;
+                            if (!title || !title.trim()) {
+                                alert('Please enter title');
+                                return;
+                            }
+
+                            const slotText = JSON.stringify(selectedSlot);
+                            selectedSlot = '';
+                            console.log('slot text', slotText);
+                            window.location.href = `/submit?title=${title}&desc=${description}&slot=${slotText}`;
+                        } else {
+                            alert('Please select a slot');
+                        }
+
+                    }
+
+                    CronofyElements.AvailabilityViewer({
+                        element_token: "<%= element_token %>",
+                        target_id: "cronofy-availability-viewer",
+                        availability_query: {
+                            participants: [
+                                {
+                                    required: "all",
+                                    members: [
+                                        {
+                                            sub: "<%= sub %>",
+                                            managed_availability: true
+                                        }
+                                    ]
+                                }
+                            ],
+                            required_duration: { minutes: 60 },
+                            available_periods: [
+                                {
+                                    start: "<%= start_date %>",
+                                    end: "<%= end_date %>"
+                                },
+                            ],
+                        },
+                        config: {
+                            start_time: "00:00",
+                            end_time: "23:59",
+                            interval: 120
+                        },
+                        callback: res => {
+                            if (res.notification.type !== "slot_selected") return;
+
+                            selectedSlot = res.notification.slot;
+                            openForm();
+                        }
+                    });
+                </script>
+            </div>
+
+        </div>
+    </div>
+    <div class="form-popup" id="myForm">
+        <form class="form-container">
+            <h1>Event Detail</h1>
+
+            <label for="title"><b>Title</b></label>
+            <input id="title" type="text" placeholder="Enter Event Title" name="title" required>
+
+            <label for="description"><b>Description</b></label>
+            <input id="description" type="text" placeholder="Enter Event Description" name="description" required>
+
+            <button type="button" class="btn" onclick="confirm()">Confirm</button>
+            <button type="button" class="btn cancel" onclick="closeForm()">Close</button>
+        </form>
+    </div>
+
+    <script>
+
+    </script>
+</body>
+</html>

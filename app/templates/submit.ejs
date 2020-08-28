@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Submit event:</title>
+
+    <link href="/app.css" rel="stylesheet">
+</head>
+<body>
+    <div class="wrapper__outer">
+        <div class="wrapper__inner">
+
+            <a href="/availability" class="link--secondary">Pick another time</a>
+                
+                <h1>Event created</h1>
+                <p>A new event was successfully added to your calendar.</p>
+
+                <div class="block block--border">
+                    <p>Event details:</p>
+                    <p><strong>Date:</strong> <%= meetingDate %></p>
+                    <p><strong>Time:</strong> <%= start %> to <%= end %></p>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+</body>
+</html>

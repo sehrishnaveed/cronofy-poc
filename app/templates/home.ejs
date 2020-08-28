@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Cronofy</title>
+
+    <link href="/app.css" rel="stylesheet">
+</head>
+<body>
+    <div class="wrapper__outer">
+        <div class="wrapper__inner">
+                
+            <h1>Settings</h1>
+            <p>Connect calendar profiles, and set your working hours.</p>
+
+            <div class="element__wrapper">
+                <div id="cronofy-calendar-sync"></div>
+                <script src="https://elements.cronofy.com/js/CronofyElements.v1.20.7.js"></script>
+                <script>
+                    CronofyElements.CalendarSync({
+                        element_token: "<%= element_token %>",
+                        target_id: "cronofy-calendar-sync",
+                        authorization: {
+                            redirect_uri: "<%= origin %>",
+                            client_id: "<%= client_id %>",
+                            scope: "read_write"
+                        }
+                    });
+                </script>
+            </div>
+
+            <div>    
+                <a href="/availability" class="button">View availability</a>
+            </div>
+
+            <hr>
+            
+            <h2 class="title-heading">Set your work hours</h2>
+            
+            <div id="cronofy-availability-rules"></div>
+            <script>
+                // Sniff the browser's timezone
+                const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+                CronofyElements.AvailabilityRules({
+                    element_token: "<%= element_token %>",
+                    target_id: "cronofy-availability-rules",
+                    availability_rule_id: "work_hours",
+                    tzid: timezone
+                });
+            </script>
+
+        </div>
+
+        <script>
+            // Add your frontend JavaScript here
+        </script>
+    </div>
+</body>
+</html>
