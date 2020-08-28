@@ -19,8 +19,7 @@ dotenv.config();
 
 // Setup
 const PORT = 7070;
-const origin = "http://localhost:7070";
-// const origin = "http://qa.umwella.com:7070";
+const origin = process.env.ORIGIN;
 
 let localStorage;
 if (typeof localStorage === "undefined" || localStorage === null) {
@@ -164,7 +163,6 @@ app.get("/", async (req, res) => {
         });
 
         setAuthTokenInfo(codeResponse);
-        getAuthTokenInfo();
 
         // set calendar id
         const cronofyClient2 = new Cronofy({
@@ -176,7 +174,9 @@ app.get("/", async (req, res) => {
         setCalendarsList(userInfo['cronofy.data'].profiles[0].profile_calendars);
     }
 
-    await refreshAccessToken();
+    if (getAuthTokenInfo()) {
+        await refreshAccessToken();
+    }
 
     // element token generation
     const token = await cronofyClient.requestElementToken({
@@ -228,7 +228,9 @@ app.get("/submit", async (req, res) => {
     const title = req.query.title;
     const desc = req.query.desc;
 
-    await refreshAccessToken();
+    if (getAuthTokenInfo()) {
+        await refreshAccessToken();
+    }
 
     const accessToken = getAccessToken();
     const calendarId = getFirstCalendarId();
