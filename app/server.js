@@ -19,7 +19,7 @@ dotenv.config();
 
 // Setup
 const PORT = 7070;
-const origin = "http://localhost:7070";
+const origin = "http://qa.umwella.com:7070";
 
 let localStorage;
 if (typeof localStorage === "undefined" || localStorage === null) {
