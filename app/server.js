@@ -8,6 +8,7 @@ const uniqid = require('uniqid');
 const localStorageHelper = require('./localStorageHelper');
 const {
     removeAuthTokenInfo,
+    removeCalendarsList,
     setAuthTokenInfo,
     getAuthTokenInfo,
     getAccessToken,
@@ -39,6 +40,8 @@ var cronofyClient = new Cronofy({
     client_secret: process.env.CLIENT_SECRET,
 });
 
+// console.log('removeCalendarsList before', removeCalendarsList());
+// console.log('get calendarId before', getFirstCalendarId());
 // console.log('account info before', getAuthTokenInfo());
 // console.log('remove account info', removeAuthTokenInfo());
 // console.log('account info after', getAuthTokenInfo());
@@ -68,8 +71,39 @@ function convertDateToTimeStamp(dateText) {
     return moment(moment.utc(dateText)).unix();
 }
 
+async function getUserInfo() {
+    await refreshAccessToken();
+
+    try {
+        payload = {
+            client_id: process.env.CLIENT_ID,
+            client_secret: process.env.CLIENT_SECRET,
+            access_token: getAccessToken(),
+        };
+        const cronofyClient2 = new Cronofy(payload);
+        const userInfo = await cronofyClient2.userInfo();
+        return userInfo['cronofy.data'].profiles;
+    }
+    catch(err) {
+        const context = {
+            payload,
+            err,
+        };
+        logInfo('Error! getUserInfo() >> "userInfo"! Exception Detail', context);
+    }
+}
+
 async function isSlotAvailable(slot) {
     await refreshAccessToken();
+
+    if (!getFirstCalendarId()) {
+        const calendarProfiles = await getUserInfo();
+
+        if (calendarProfiles && calendarProfiles.length > 0) {
+            setCalendarsList(calendarProfiles[0].profile_calendars);
+        }
+        logInfo('No calendar account connected', calendarProfiles);
+    }
 
     let payload = {
         client_id: process.env.CLIENT_ID,
@@ -198,29 +232,15 @@ app.get("/", async (req, res) => {
         }
 
         // set calendar id
-        try {
-            payload = {
-                client_id: process.env.CLIENT_ID,
-                client_secret: process.env.CLIENT_SECRET,
-                access_token: getAccessToken(),
-            };
-            const cronofyClient2 = new Cronofy(payload);
-            const userInfo = await cronofyClient2.userInfo();
-            setCalendarsList(userInfo['cronofy.data'].profiles[0].profile_calendars);
-        }
-        catch(err) {
-            const context = {
-                payload,
-                err,
-            };
-            logInfo('Error! Home Page url '/' >> "userInfo"! Exception Detail', context);
-        }
+        const calendarProfiles = await getUserInfo();
 
+        if (calendarProfiles.length > 0) {
+            setCalendarsList(calendarProfiles[0].profile_calendars);
+        }
+        logInfo('No calendar account connected', calendarProfiles);
     }
 
-    if (getAuthTokenInfo()) {
-        await refreshAccessToken();
-    }
+    await refreshAccessToken();
 
     // element token generation
     payload = {

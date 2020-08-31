@@ -25,13 +25,21 @@ function setCalendarsList(calendarInfo) {
     localStorage.setItem('calendar_info', JSON.stringify(calendarInfo));
 }
 
+function removeCalendarsList() {
+    localStorage.removeItem('calendar_info');
+}
+
 function getFirstCalendarId() {
     const calendarInfo = JSON.parse(localStorage.getItem('calendar_info'));
-    return calendarInfo[0].calendar_id;
+    if (calendarInfo && calendarInfo.length > 0) {
+        return calendarInfo[0].calendar_id;
+    }
+    return null;
 }
 
 module.exports = {
     removeAuthTokenInfo,
+    removeCalendarsList,
     setAuthTokenInfo,
     getAuthTokenInfo,
     getAccessToken,
