@@ -50,6 +50,14 @@
                         document.getElementById("confirm-button").disabled = false;
                     }
 
+                    function hideHelperText() {
+                        document.getElementById('helperText').style.display="none";
+                    }
+
+                    function showHelperText() {
+                        document.getElementById('helperText').style.display="block";
+                    }
+
                     async function confirm() {
                         const slotText = document.getElementById("slotInput").value;
                         if (slotText) {
@@ -61,15 +69,18 @@
                             }
 
                             disableConfirmButton();
+                            showHelperText();
                             if (!await checkSlotAvailability(slotText)) {
                                 document.getElementById("slotInput").value = '';
                                 alert('This slot is not available. Please select another slot');
                                 enableConfirmButton();
+                                hideHelperText();
                                 return;
                             }
 
                             await createEvent(slotText, title, description);
                             enableConfirmButton();
+                            hideHelperText();
 
                             document.getElementById("slotInput").value = '';
                             window.location.href = `/submit?title=${title}&desc=${description}&slot=${slotText}`;
@@ -132,6 +143,7 @@
 
             <button id="confirm-button" type="button" class="btn" onclick="confirm()">Confirm</button>
             <button type="button" class="btn cancel" onclick="closeForm()">Close</button>
+            <p id="helperText" style="display: none">confirming...</p>
         </form>
     </div>
 
