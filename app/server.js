@@ -1,23 +1,30 @@
 // Import the dependencies
-var Cronofy = require('cronofy');
+const Cronofy = require('cronofy');
 const dotenv = require("dotenv");
 const express = require("express");
 const bodyParser = require("body-parser");
-var moment = require('moment-timezone');
-var uniqid = require('uniqid');
+const moment = require('moment-timezone');
+const uniqid = require('uniqid');
+const localStorageHelper = require('./localStorageHelper');
+const {
+    removeAuthTokenInfo,
+    setAuthTokenInfo,
+    getAuthTokenInfo,
+    getAccessToken,
+    setCalendarsList,
+    getFirstCalendarId
+} = localStorageHelper;
+
+const { logInfo } = require('./logger');
+
 
 // Enable dotenv
 dotenv.config();
 
 // Setup
 const PORT = 7070;
-const origin = process.env.ORIGIN;
-
-let localStorage;
-if (typeof localStorage === "undefined" || localStorage === null) {
-    var LocalStorage = require('node-localstorage').LocalStorage;
-    localStorage = new LocalStorage('./scratch');
-}
+const ORIGIN = process.env.ORIGIN;
+const REFRESH_TOKEN = process.env.REFRESH_TOKEN;
 
 // Setup Express
 const app = express();
@@ -32,111 +39,135 @@ var cronofyClient = new Cronofy({
     client_secret: process.env.CLIENT_SECRET,
 });
 
-function setAuthTokenInfo(authToken) {
-    localStorage.setItem('auth_token_detail', JSON.stringify(authToken));
-}
-
-function getAuthTokenInfo() {
-    return JSON.parse(localStorage.getItem('auth_token_detail'));
-}
-
-function getAccessToken() {
-    const authDetail = JSON.parse(localStorage.getItem('auth_token_detail'));
-    if (authDetail) {
-        return authDetail.access_token;
-    }
-}
-
-function getRefreshToken() {
-    const authDetail = JSON.parse(localStorage.getItem('auth_token_detail'));
-    if (authDetail) {
-        return authDetail.refresh_token;
-    }
-}
-
-function setCalendarsList(calendarInfo) {
-    localStorage.setItem('calendar_info', JSON.stringify(calendarInfo));
-}
-
-function getFirstCalendarId() {
-    const calendarInfo = JSON.parse(localStorage.getItem('calendar_info'));
-    return calendarInfo[0].calendar_id;
-}
+// console.log('account info before', getAuthTokenInfo());
+// console.log('remove account info', removeAuthTokenInfo());
+// console.log('account info after', getAuthTokenInfo());
 
 async function refreshAccessToken() {
-    const result = await cronofyClient.refreshAccessToken({
-        grant_type: 'refresh_token',
-        refresh_token: getRefreshToken(),
-    });
-
-    const authTokenInfo = getAuthTokenInfo();
-    authTokenInfo.access_token = result.access_token;
-    authTokenInfo.refresh_token = result.refresh_token;
-    setAuthTokenInfo(authTokenInfo);
+    let payload = '';
+    try {
+        payload = {
+            grant_type: 'refresh_token',
+            refresh_token: REFRESH_TOKEN,
+        };
+        // console.log('refreshAccessToken >> payload', payload);
+        const result = await cronofyClient.refreshAccessToken(payload);
+        // console.log('refreshAccessToken >> result', result);
+        setAuthTokenInfo(result);
+    }
+    catch (err) {
+        const context = {
+            payload,
+            err,
+        };
+        logInfo('Error! refreshAccessToken() >> Exception Detail', context);
+    }
 }
 
 function convertDateToTimeStamp(dateText) {
     return moment(moment.utc(dateText)).unix();
 }
 
-async function isSlotAvailable(accessToken, calendarId, slot) {
-    const cronofyClient2 = new Cronofy({
+async function isSlotAvailable(slot) {
+    await refreshAccessToken();
+
+    let payload = {
         client_id: process.env.CLIENT_ID,
         client_secret: process.env.CLIENT_SECRET,
-        access_token: accessToken,
-    });
+        access_token: getAccessToken(),
+    };
+    try {
+        const cronofyClient2 = new Cronofy(payload);
 
-    // add 1 day in end date as API does not include event occurring on "to" date.
-    const toDateString = moment(moment(moment.utc(slot.end)).toDate()).add(1, 'days').format('YYYY-MM-DD');
+        // add 1 day in end date as API does not include event occurring on "to" date.
+        const toDateString = moment(moment(moment.utc(slot.end)).toDate()).add(1, 'days').format('YYYY-MM-DD');
 
-    const result = await cronofyClient2.freeBusy({
-        from: slot.start,
-        to: `${toDateString}T05:00:00Z`,
-        tzid: moment.tz.guess(),
-        include_managed: true,
-        calendar_ids: [
-            calendarId,
-        ]
-    });
+        const result = await cronofyClient2.freeBusy({
+            from: slot.start,
+            to: `${toDateString}T05:00:00Z`,
+            tzid: moment.tz.guess(),
+            include_managed: true,
+            calendar_ids: [
+                getFirstCalendarId(),
+            ]
+        });
 
-    // console.log('free-busy slots', result);
-    const events = result.free_busy;
+        const events = result.free_busy;
 
-    const slotStart = convertDateToTimeStamp(slot.start);
-    const slotEnd = convertDateToTimeStamp(slot.end);
+        const slotStart = convertDateToTimeStamp(slot.start);
+        const slotEnd = convertDateToTimeStamp(slot.end);
 
-    const filtered = events.filter(event => {
-        if (event.free_busy_status === 'busy') {
-            const eventStart = convertDateToTimeStamp(event.start);
-            const eventEnd = convertDateToTimeStamp(event.end);
+        const filtered = events.filter(event => {
+            if (event.free_busy_status === 'busy') {
+                const eventStart = convertDateToTimeStamp(event.start);
+                const eventEnd = convertDateToTimeStamp(event.end);
 
-            // console.log('event start | event end', eventStart, eventEnd);
-            // console.log('slot start | slot end', slotStart, slotEnd);
-            // console.log('-----------------------------------------');
+                if (slotStart >= eventStart && slotStart < eventEnd) {
+                    console.log('slot start clash');
+                    return true;
+                }
 
-            if (slotStart >= eventStart && slotStart < eventEnd) {
-                console.log('slot start clash');
-                return true;
+                if (slotEnd > eventStart && slotEnd < eventEnd) {
+                    console.log('slot end clash');
+                    return true;
+                }
             }
+            return false;
+        });
 
-            if (slotEnd > eventStart && slotEnd < eventEnd) {
-                console.log('slot end clash');
-                return true;
-            }
+        if (filtered.length > 0) {
+            console.log('booked slot', filtered);
+            return false;
         }
-        return false;
-    });
-
-    if (filtered.length > 0) {
-        console.log('booked slot', filtered);
-        return false;
+        return true;
     }
-    return true;
+    catch (err) {
+        const context = {
+            payload,
+            err,
+        };
+        logInfo('Error! isSlotAvailable() >> "freeBusy"! Exception Detail', context);
+    }
 }
 
-const helperMethod = {
-    isSlotAvailable: isSlotAvailable,
-};
+
+app.get('/checkSlotAvailability', async (req, res) => {
+    const isAvailable =  await isSlotAvailable(JSON.parse(req.query.slot));
+    res.send({isAvailable});
+});
+
+app.get('/createEvent', async (req, res) => {
+    try {
+        const slot = JSON.parse(req.query.slot);
+        const title = req.query.title;
+        const desc = req.query.desc;
+
+        await refreshAccessToken();
+
+        const cronofyClient2 = new Cronofy({
+            client_id: process.env.CLIENT_ID,
+            client_secret: process.env.CLIENT_SECRET,
+            access_token: getAccessToken(),
+        });
+
+        const result = await cronofyClient2.createEvent({
+            calendar_id: getFirstCalendarId(),
+            event_id: "booking_demo_event" + uniqid(),
+            summary: title || 'Book an event',
+            description: desc || 'event description goes here',
+            start: slot.start,
+            end: slot.end
+        });
+
+        res.status(200).send({result});
+    }
+    catch(err) {
+
+        logInfo('Error! On creating event "createEvent" >> Exception Detail', err);
+        res.status(400).send({err});
+    }
+});
+
 
 // Route: home
 app.get("/", async (req, res) => {
@@ -145,24 +176,46 @@ app.get("/", async (req, res) => {
     const codeFromQuery = req.query.code;
 
     if (codeFromQuery) {
-        const codeResponse = await cronofyClient.requestAccessToken({
-            client_id: process.env.CLIENT_ID,
-            client_secret: process.env.CLIENT_SECRET,
-            grant_type: "authorization_code",
-            code: codeFromQuery,
-            redirect_uri: origin
-        });
+        let payload = '';
+        try {
+            payload = {
+                client_id: process.env.CLIENT_ID,
+                client_secret: process.env.CLIENT_SECRET,
+                grant_type: "authorization_code",
+                code: codeFromQuery,
+                redirect_uri: ORIGIN
+            };
+            const codeResponse = await cronofyClient.requestAccessToken(payload);
 
-        setAuthTokenInfo(codeResponse);
+            setAuthTokenInfo(codeResponse);
+        }
+        catch(err) {
+            const context = {
+                payload,
+                err,
+            };
+            logInfo('Error on calling requestAccessTokens! Exception Detail', context);
+        }
 
         // set calendar id
-        const cronofyClient2 = new Cronofy({
-            client_id: process.env.CLIENT_ID,
-            client_secret: process.env.CLIENT_SECRET,
-            access_token: getAccessToken(),
-        });
-        const userInfo = await cronofyClient2.userInfo();
-        setCalendarsList(userInfo['cronofy.data'].profiles[0].profile_calendars);
+        try {
+            payload = {
+                client_id: process.env.CLIENT_ID,
+                client_secret: process.env.CLIENT_SECRET,
+                access_token: getAccessToken(),
+            };
+            const cronofyClient2 = new Cronofy(payload);
+            const userInfo = await cronofyClient2.userInfo();
+            setCalendarsList(userInfo['cronofy.data'].profiles[0].profile_calendars);
+        }
+        catch(err) {
+            const context = {
+                payload,
+                err,
+            };
+            logInfo('Error! Home Page url '/' >> "userInfo"! Exception Detail', context);
+        }
+
     }
 
     if (getAuthTokenInfo()) {
@@ -170,45 +223,64 @@ app.get("/", async (req, res) => {
     }
 
     // element token generation
-    const token = await cronofyClient.requestElementToken({
+    payload = {
         version: "1",
         permissions: ["account_management", "managed_availability"],
         subs: [process.env.SUB],
-        origin: origin
-    });
+        origin: ORIGIN
+    };
 
-    return res.render("home", {
-        element_token: token.element_token.token,
-        client_id: process.env.CLIENT_ID,
-        origin: origin,
-    });
+    try {
+        const token = await cronofyClient.requestElementToken(payload);
+
+        return res.render("home", {
+            element_token: token.element_token.token,
+            client_id: process.env.CLIENT_ID,
+            origin: ORIGIN,
+        });
+    }
+    catch(err) {
+        const context = {
+            payload,
+            err,
+        };
+        logInfo('Error! Home Page url '/' >> "requestElementToken"! Exception Detail', context);
+    }
 });
 
 // Route: availability
 app.get("/availability", async (req, res) => {
     // Availability code goes here
-    const todayDate = new Date();
-    const startDate = moment(todayDate, 'DD-MM-YYYY')
-        .add(1, 'days')
-        .format('YYYY-MM-DD');
-    const endDate = moment(new Date(), 'DD-MM-YYYY')
-        .add(30, 'days')
-        .format('YYYY-MM-DD');
 
-    const token = await cronofyClient.requestElementToken({
-        version: "1",
-        permissions: ["availability"],
-        subs: [process.env.SUB],
-        origin: origin
-    });
+    try {
+        const todayDate = new Date();
+        const startDate = moment(todayDate, 'DD-MM-YYYY')
+            .add(1, 'days')
+            .format('YYYY-MM-DD');
+        const endDate = moment(new Date(), 'DD-MM-YYYY')
+            .add(30, 'days')
+            .format('YYYY-MM-DD');
 
-    return res.render("availability", {
-        element_token: token.element_token.token,
-        sub: process.env.SUB,
-        start_date: startDate + "T00:00:00Z",
-        end_date: endDate + "T23:59:59Z",
-        helperMethod: helperMethod,
-    });
+        const token = await cronofyClient.requestElementToken({
+            version: "1",
+            permissions: ["availability"],
+            subs: [process.env.SUB],
+            origin: ORIGIN
+        });
+
+        return res.render("availability", {
+            element_token: token.element_token.token,
+            sub: process.env.SUB,
+            start_date: startDate + "T00:00:00Z",
+            end_date: endDate + "T23:59:59Z",
+            isSlotAvailable: isSlotAvailable,
+        });
+    }
+    catch(err) {
+        logInfo('Error! On loading page "/availability" >> Exception Detail', err);
+    }
+
+
 });
 
 // Route: submit
@@ -216,49 +288,26 @@ app.get("/submit", async (req, res) => {
 
     // Get the `slot` data from the query string
     const slot = JSON.parse(req.query.slot);
-    const title = req.query.title;
-    const desc = req.query.desc;
 
-    if (getAuthTokenInfo()) {
-        await refreshAccessToken();
+    try {
+        const meetingDate = moment(slot.start).format("DD MMM YYYY");
+        const start = moment(slot.start).format("LT");
+        const end = moment(slot.end).format("LT");
+
+        return res.render("submit", {
+            meetingDate,
+            start,
+            end
+        });
+    }
+    catch(err) {
+        logInfo('Error! On loading event-detail page. Exception Detail', err);
     }
 
-    const accessToken = getAccessToken();
-    const calendarId = getFirstCalendarId();
-
-    const cronofyClient2 = new Cronofy({
-        client_id: process.env.CLIENT_ID,
-        client_secret: process.env.CLIENT_SECRET,
-        access_token: accessToken,
-    });
-
-    if (!await isSlotAvailable(accessToken, calendarId, slot)) {
-        console.log('This slot is not available. Please select another slot');
-        return;
-    }
-
-    cronofyClient2.createEvent({
-        calendar_id: calendarId,
-        event_id: "booking_demo_event" + uniqid(),
-        summary: title || 'Book an event',
-        description: desc || 'event description goes here',
-        start: slot.start,
-        end: slot.end
-    });
-
-    const meetingDate = moment(slot.start).format("DD MMM YYYY");
-    const start = moment(slot.start).format("LT");
-    const end = moment(slot.end).format("LT");
-
-    return res.render("submit", {
-        meetingDate,
-        start,
-        end
-    });
 });
 
 
 app.listen(PORT);
-console.log(`serving on ${origin}`);
+console.log(`serving on ${ORIGIN}`);
 
 

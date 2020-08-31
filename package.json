@@ -20,6 +20,7 @@
         "moment": "^2.27.0",
         "moment-timezone": "^0.5.31",
         "node-localstorage": "^2.1.6",
+        "simple-node-logger": "^18.12.24",
         "uniqid": "^5.2.0"
     }
 }

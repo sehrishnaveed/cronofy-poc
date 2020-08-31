@@ -23,7 +23,6 @@
 
                 <script src="https://elements.cronofy.com/js/CronofyElements.v1.20.7.js"></script>
                 <script>
-                    let selectedSlot = {};
                     function openForm() {
                         document.getElementById("myForm").style.display = "block";
                     }
@@ -32,8 +31,28 @@
                         document.getElementById("myForm").style.display = "none";
                     }
 
-                    function confirm() {
-                        if (selectedSlot) {
+                    async function checkSlotAvailability(slotText) {
+                        const response = await fetch('/checkSlotAvailability?slot='+slotText);
+                        const result = await response.json();
+                        return result.isAvailable;
+                    }
+
+                    async function createEvent(slotText, title, desc) {
+                        const response = await fetch('/createEvent?slot='+slotText+'&title='+title+'&desc='+desc);
+                        const result = await response.json();
+                    }
+
+                    function disableConfirmButton() {
+                        document.getElementById("confirm-button").disabled = true;
+                    }
+
+                    function enableConfirmButton() {
+                        document.getElementById("confirm-button").disabled = false;
+                    }
+
+                    async function confirm() {
+                        const slotText = document.getElementById("slotInput").value;
+                        if (slotText) {
                             const title = document.getElementById("title").value;
                             const description = document.getElementById('description').value;
                             if (!title || !title.trim()) {
@@ -41,9 +60,18 @@
                                 return;
                             }
 
-                            const slotText = JSON.stringify(selectedSlot);
-                            selectedSlot = '';
-                            console.log('slot text', slotText);
+                            disableConfirmButton();
+                            if (!await checkSlotAvailability(slotText)) {
+                                document.getElementById("slotInput").value = '';
+                                alert('This slot is not available. Please select another slot');
+                                enableConfirmButton();
+                                return;
+                            }
+
+                            await createEvent(slotText, title, description);
+                            enableConfirmButton();
+
+                            document.getElementById("slotInput").value = '';
                             window.location.href = `/submit?title=${title}&desc=${description}&slot=${slotText}`;
                         } else {
                             alert('Please select a slot');
@@ -82,7 +110,7 @@
                         callback: res => {
                             if (res.notification.type !== "slot_selected") return;
 
-                            selectedSlot = res.notification.slot;
+                            document.getElementById('slotInput').value = JSON.stringify(res.notification.slot);
                             openForm();
                         }
                     });
@@ -91,6 +119,7 @@
 
         </div>
     </div>
+    <input type="hidden" id="slotInput" />
     <div class="form-popup" id="myForm">
         <form class="form-container">
             <h1>Event Detail</h1>
@@ -101,7 +130,7 @@
             <label for="description"><b>Description</b></label>
             <input id="description" type="text" placeholder="Enter Event Description" name="description" required>
 
-            <button type="button" class="btn" onclick="confirm()">Confirm</button>
+            <button id="confirm-button" type="button" class="btn" onclick="confirm()">Confirm</button>
             <button type="button" class="btn cancel" onclick="closeForm()">Close</button>
         </form>
     </div>

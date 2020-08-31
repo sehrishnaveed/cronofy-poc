@@ -31,8 +31,22 @@
                 </script>
             </div>
 
-            <div>    
-                <a href="/availability" class="button">View availability</a>
+            <div>
+                <script>
+                    function handleAvailabilityClick() {
+                        const connectedCalendars = document.getElementsByClassName('AvailabilityViewer__profiles').length;
+                        console.log('length', connectedCalendars.length);
+                        if (!connectedCalendars || connectedCalendars.length === 0) {
+                            alert('No calendar account setup! Please setup a calendar account');
+                            return;
+                        }
+                        else {
+                            window.location.href = '/availability';
+                        }
+
+                    }
+                </script>
+                <button onclick="handleAvailabilityClick()" class="button">View availability</button>
             </div>
 
             <hr>
